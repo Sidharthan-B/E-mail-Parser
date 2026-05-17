@@ -1,0 +1,40 @@
+{
+  "name": "parser",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "sample": "ts-node-dev --transpile-only scripts/run-sample.ts",
+    "parse-inbox": "ts-node-dev --transpile-only scripts/parse-inbox.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "Aarambh recruiter email extraction and recognition pipeline",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/mailparser": "^3.4.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.6.2",
+    "@types/pdf-parse": "^1.1.5",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "axios": "^1.16.0",
+    "cheerio": "^1.2.0",
+    "dayjs": "^1.11.20",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "googleapis": "^171.4.0",
+    "jszip": "^3.10.1",
+    "mailparser": "^3.9.8",
+    "multer": "^2.1.1",
+    "pdf-parse": "^1.1.1",
+    "word-extractor": "^1.0.4",
+    "zod": "^4.4.3"
+  }
+}

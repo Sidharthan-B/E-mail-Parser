@@ -1,0 +1,13 @@
+node_modules
+dist
+.env
+*.log
+__pycache__
+.pytest_cache
+
+uploads/inbox/*
+!uploads/inbox/.gitkeep
+uploads/parsed/*
+!uploads/parsed/.gitkeep
+uploads/processed/*
+!uploads/processed/.gitkeep
