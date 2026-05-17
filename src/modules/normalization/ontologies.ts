@@ -31,9 +31,35 @@ export const BRANCH_ALIASES: Record<string, string[]> = {
 
 export const SPECIALISATION_ALIASES: Record<string, string[]> = {
   "AI/ML": BRANCH_ALIASES["AI/ML"] ?? [],
+  "AI & DS": BRANCH_ALIASES["AI & DS"] ?? [],
   "Data Science": BRANCH_ALIASES["Data Science"] ?? [],
   "Cyber Security": BRANCH_ALIASES["Cyber Security"] ?? [],
   "Embedded Systems": BRANCH_ALIASES["Embedded Systems"] ?? []
+};
+
+/** Maps a specialisation to the most natural parent department. */
+export const SPECIALISATION_PARENT: Record<string, string> = {
+  "AI/ML": "CSE",
+  "AI & DS": "CSE",
+  "Data Science": "CSE",
+  "Cyber Security": "CSE",
+  "Embedded Systems": "ECE",
+  "VLSI": "ECE",
+  "IoT": "ECE",
+  "Networking": "ECE",
+  "Cloud Computing": "CSE",
+  "Full Stack": "CSE",
+  "DevOps": "CSE",
+  "Robotics": "ECE",
+  "Signal Processing": "ECE",
+  "Power Systems": "EEE",
+  "Control Systems": "EEE",
+  "VLSI Design": "ECE",
+  "IT Security": "IT",
+  "Information Security": "IT",
+  "Network Security": "IT",
+  "Database": "CSE",
+  "Software Engineering": "CSE"
 };
 
 export const WORK_MODE_ALIASES: Record<"Remote" | "Hybrid" | "Onsite", string[]> = {

@@ -75,60 +75,53 @@ function extractRole(raw: string): string {
   return "";
 }
 
+// Branch abbreviations that are safe to match in eligibility-context lines
+const ABBREV_BRANCH_MAP: Record<string, string> = {
+  CSE: "CSE", CS: "CSE",
+  IT: "IT",
+  ISE: "ISE",
+  ECE: "ECE",
+  EEE: "EEE", EE: "EEE",
+  EIE: "EIE",
+  MCA: "MCA",
+  BCA: "BCA",
+  ME: "Mechanical", MECH: "Mechanical",
+  CE: "Civil",
+};
+
+// Lines that establish an eligibility/branch context
+const ELIGIBILITY_LINE_RE = /\b(eligible|eligibility|branch(?:es)?|department|stream|qualification|b\.?tech|b\.?e\.?|m\.?tech|m\.?e\.?)\b/i;
+
 function extractBranches(raw: string): string[] {
   const t = raw;
   const out = new Set<string>();
 
   const add = (code: string) => {
-    const c = code.trim().toUpperCase();
-    if (c) {
-      out.add(c);
-    }
+    const c = code.trim();
+    if (c) out.add(c);
   };
 
-  if (/\bB\.?E\/B\.?Tech[-\s]*CS\/IT\b/i.test(t) || /\bB\.?Tech[-\s]*CS\s*\/\s*IT\b/i.test(t)) {
-    add("CSE");
-    add("IT");
-  }
-  if (/\bCS\s*\/\s*IT\b/i.test(t) && !out.has("CSE")) {
-    add("CSE");
-    add("IT");
-  }
-  if (/\bComputer\s+Science\b/i.test(t)) {
-    add("CSE");
-  }
-  if (/\bInformation\s+Technology\b/i.test(t)) {
-    add("IT");
-  }
-  if (/\ballied\s+CS\b/i.test(t) || /\ballied\s+computer\b/i.test(t)) {
-    add("CSE");
-  }
-  if (/\bM\.?E\/M\.?Tech\b/i.test(t)) {
-    if (/Computer\s+Science/i.test(t)) {
-      add("CSE");
+  // Full-name patterns (whole document)
+  if (/\bB\.?E\/B\.?Tech[-\s]*CS\/IT\b/i.test(t) || /\bB\.?Tech[-\s]*CS\s*\/\s*IT\b/i.test(t)) { add("CSE"); add("IT"); }
+  if (/\bCS\s*\/\s*IT\b/i.test(t) && !out.has("CSE")) { add("CSE"); add("IT"); }
+  if (/\bComputer\s+Science\b/i.test(t)) add("CSE");
+  if (/\bInformation\s+Technology\b/i.test(t)) add("IT");
+  if (/\bInformation\s+Science\b/i.test(t)) add("ISE");
+  if (/\ballied\s+CS\b/i.test(t) || /\ballied\s+computer\b/i.test(t)) add("CSE");
+  if (/\bElectronics\s+and\s+Communication\b/i.test(t)) add("ECE");
+  if (/\bElectrical\s+and\s+Electronics\b/i.test(t) || /\bElectrical\b/i.test(t)) add("EEE");
+  if (/\ball\s+Circuit\s+Branches?\b/i.test(t)) { add("ECE"); add("EEE"); }
+  if (/\bMechanical\b/i.test(t)) add("Mechanical");
+  if (/\bCivil\b/i.test(t)) add("Civil");
+
+  // Abbreviation scan: only on eligibility-context lines to avoid false positives
+  const eligibilityLines = t.split(/\n/).filter((l) => ELIGIBILITY_LINE_RE.test(l));
+  const abbrevRe = new RegExp(`\\b(${Object.keys(ABBREV_BRANCH_MAP).join("|")})\\b`, "gi");
+  for (const line of eligibilityLines) {
+    for (const m of line.matchAll(abbrevRe)) {
+      const canonical = ABBREV_BRANCH_MAP[m[1].toUpperCase()];
+      if (canonical) add(canonical);
     }
-    if (/Information\s+Technology/i.test(t)) {
-      add("IT");
-    }
-  }
-  if (/\bMCA\b/i.test(t)) {
-    add("MCA");
-  }
-  if (/\bMechanical\b/i.test(t)) {
-    add("ME");
-  }
-  if (/\bCivil\b/i.test(t)) {
-    add("CIVIL");
-  }
-  if (/\ball\s+Circuit\s+Branches?\b/i.test(t)) {
-    add("ECE");
-    add("EEE");
-  }
-  if (/\bElectronics\s+and\s+Communication\b/i.test(t) || /\bECE\b/i.test(t)) {
-    add("ECE");
-  }
-  if (/\bElectrical\b/i.test(t) || /\bEEE\b/i.test(t)) {
-    add("EEE");
   }
 
   return [...out];

@@ -9,7 +9,7 @@ export type SectionMap = {
 
 export type EligibleDepartment = {
   department: string;
-  category: "core" | "circuit" | "specialization" | "degree" | "other";
+  specialisation: string | null;
 };
 
 export type EligibleBatchYear = {
@@ -49,12 +49,12 @@ export type RecruiterEntity = {
   total_rounds: number;
   round_details: RoundDetail[];
   current_deadline: number | null;
-  total_positions: number | null;
+  openings: number | null;
+  application_count: number | null;
   application_link: string | null;
   contact_email: string | null;
   contact_phone: string | null;
   additional_information: string | null;
-  job_source: string | null;
 };
 
 export type ParsedAttachment = {

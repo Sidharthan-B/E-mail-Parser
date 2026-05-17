@@ -1,8 +1,6 @@
 import express from "express";
 import multer, { MulterError } from "multer";
 import { env } from "./config/env";
-import { GmailService } from "./modules/gmail/gmailService";
-import { getOAuthClient } from "./modules/gmail/gmailClient";
 import { runExtractionPipeline } from "./modules/parser/pipeline";
 import { normalizeText } from "./modules/normalization/normalizer";
 import { segmentSections } from "./modules/segmentation/sectionSegmenter";
@@ -13,8 +11,6 @@ import { DocumentTextExtractor } from "./modules/parser/documentTextExtractor";
 const app = express();
 app.use(express.json({ limit: "2mb" }));
 
-const gmailService = new GmailService();
-
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 }
@@ -22,37 +18,6 @@ const upload = multer({
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "aarambh-parser", mode: env.NODE_ENV });
-});
-
-app.get("/api/gmail/oauth2/url", (_req, res) => {
-  const oauth2Client = getOAuthClient();
-  const url = oauth2Client.generateAuthUrl({
-    access_type: "offline",
-    scope: ["https://www.googleapis.com/auth/gmail.readonly"]
-  });
-  res.json({ url });
-});
-
-app.get("/api/gmail/oauth2/callback", async (req, res) => {
-  const code = String(req.query.code ?? "");
-  if (!code) {
-    res.status(400).json({ error: "Missing code query parameter" });
-    return;
-  }
-
-  const oauth2Client = getOAuthClient();
-  const { tokens } = await oauth2Client.getToken(code);
-  res.json({
-    message: "Persist this refresh token into .env as GMAIL_REFRESH_TOKEN",
-    refresh_token: tokens.refresh_token ?? null
-  });
-});
-
-app.post("/api/pipeline/fetch-unread", async (req, res) => {
-  const maxResults = Number(req.body?.maxResults ?? 5);
-  const emails = await gmailService.fetchUnreadRecruiterEmails(maxResults);
-  const extracted = await Promise.all(emails.map((email) => runExtractionPipeline(email)));
-  res.json({ count: extracted.length, data: extracted });
 });
 
 app.post("/api/pipeline/parse-text", async (req, res) => {

@@ -1,8 +1,8 @@
-# Aarambh Recruiter Email Intelligence Pipeline
+# Aarambh Recruiter Document Intelligence Pipeline
 
 
 
-Local-only, production-oriented recruiter email extraction and information recognition system for placement automation.
+Local-only, production-oriented recruiter document extraction and information recognition system for placement automation.
 
 
 
@@ -12,7 +12,7 @@ Local-only, production-oriented recruiter email extraction and information recog
 
 - Node.js + TypeScript + Express
 
-- Gmail API + `mailparser` + `cheerio`
+- `mailparser` + `cheerio`
 
 - In-process text extraction: `pdf-parse`, `word-extractor` (Word `.doc` / `.docx`), `jszip` (PowerPoint `.pptx`)
 
@@ -30,9 +30,9 @@ Local-only, production-oriented recruiter email extraction and information recog
 
 
 
-- `gmail`: OAuth2 + unread mail ingestion
-
 - `parser`: MIME parsing, HTML cleaning, attachment text extraction, end-to-end orchestrator
+
+- `localFolder`: local inbox file processing
 
 - `normalization`: text and field normalization
 
@@ -146,29 +146,41 @@ curl -s -X POST http://localhost:8080/api/pipeline/parse-upload -F "file=@./uplo
 
 
 
-Response body is the same `RecruiterEntity` JSON as `parse-text` / Gmail pipeline (company, role, CTC, branches, etc.).
+Response body is the same `RecruiterEntity` JSON as `parse-text` (company, role, CTC, branches, etc.).
 
 
 
-## Gmail OAuth2
+## Local Inbox Processing
 
 
 
-1. Open `GET /api/gmail/oauth2/url`
-
-2. Authorize Google account
-
-3. Copy `refresh_token` from callback response
-
-4. Set `GMAIL_REFRESH_TOKEN` in `.env`
+Process all files in the local `uploads/inbox` directory automatically.
 
 
 
-Then call:
+1. List files in inbox:
+
+```bash
+
+GET /api/local/inbox
+
+```
 
 
 
-- `POST /api/pipeline/fetch-unread` with `{ "maxResults": 5 }`
+2. Process all inbox files:
+
+```bash
+
+POST /api/local/process-inbox
+
+Body: { "moveToProcessed": true }  // optional: moves parsed files to uploads/processed
+
+```
+
+
+
+Supported file types: `.txt`, `.text`, `.md`, `.pdf`, `.docx`, `.doc`, `.pptx`, `.eml`, `.mime`
 
 
 

@@ -37,12 +37,12 @@ export function validateRecruiterEntity(entity: RecruiterEntity): RecruiterEntit
   entity.round_details = cleanRounds(entity.round_details);
   entity.total_rounds = entity.round_details.length;
   entity.current_deadline = validNumber(entity.current_deadline, 0, 4102444800);
-  entity.total_positions = validNumber(entity.total_positions, 1, 100000);
+  entity.openings = validNumber(entity.openings, 1, 100000);
+  entity.application_count = null;
   entity.application_link = cleanString(entity.application_link);
   entity.contact_email = cleanString(entity.contact_email);
   entity.contact_phone = cleanString(entity.contact_phone);
   entity.additional_information = cleanString(entity.additional_information);
-  entity.job_source = cleanString(entity.job_source) ?? "campus";
 
   return entity;
 }

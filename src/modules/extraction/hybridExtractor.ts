@@ -19,17 +19,35 @@ import {
 } from "../normalization/normalizer";
 import { extractDeterministic } from "./deterministicExtractor";
 import { extractWithLocalNlp } from "./nlpBridge";
-import { extractWithOllamaSemanticAssistant, SemanticExtraction } from "../semantic/ollamaSemanticAssistant";
+import { extractWithOllamaSemanticAssistant, SemanticExtraction, SemanticRole } from "../semantic/ollamaSemanticAssistant";
 import { extractPlacementHeuristics } from "./placementHeuristics";
 
-export async function extractRecruiterInformation(email: ParsedEmail): Promise<RecruiterEntity> {
+export async function extractRecruiterInformation(email: ParsedEmail): Promise<RecruiterEntity[]> {
   const deterministic = extractDeterministic(email.cleanedText);
   const heuristics = extractPlacementHeuristics(email.cleanedText);
   const [semantic, nlp] = await Promise.all([
-    extractWithOllamaSemanticAssistant(email.cleanedText),
+    extractWithOllamaSemanticAssistant(email.text),  // use pre-section original; cleanedText has sections appended
     extractWithLocalNlp(email.cleanedText)
   ]);
 
+  // Build shared base fields that apply to all roles
+  const base = buildBaseEntity(email, deterministic, heuristics, semantic, nlp);
+
+  // Multi-role: if Ollama returned multiple roles, fan out into separate entities
+  if (semantic.roles && semantic.roles.length > 1) {
+    return semantic.roles.map((roleEntry) => mergeRoleOverride(base, roleEntry));
+  }
+
+  return [base];
+}
+
+function buildBaseEntity(
+  email: ParsedEmail,
+  deterministic: ReturnType<typeof extractDeterministic>,
+  heuristics: ReturnType<typeof extractPlacementHeuristics>,
+  semantic: SemanticExtraction,
+  nlp: Awaited<ReturnType<typeof extractWithLocalNlp>>
+): RecruiterEntity {
   const notes = new Set<string>(semantic.additional_info ?? []);
 
   const companyName =
@@ -41,10 +59,10 @@ export async function extractRecruiterInformation(email: ParsedEmail): Promise<R
     null;
 
   const role = normalizeRole(
-    cleanString(semantic.role) ||
-      cleanString(nlp.role) ||
-      cleanString(heuristics.role) ||
-      inferRoleFromProfile(email.cleanedText) ||
+    cleanRole(cleanString(semantic.role)) ||
+      cleanRole(cleanString(nlp.role)) ||
+      cleanRole(cleanString(heuristics.role)) ||
+      cleanRole(inferRoleFromProfile(email.cleanedText)) ||
       "Unknown Role"
   );
 
@@ -54,13 +72,17 @@ export async function extractRecruiterInformation(email: ParsedEmail): Promise<R
   const allowedBacklogs =
     deterministic.allowedBacklogs ?? nullIfNegative(normalizeBacklogCount(semantic.max_allowed_backlogs, email.cleanedText));
 
-  const location = cleanString(semantic.location) || cleanString(nlp.location) || inferLocation(email.cleanedText) || null;
+  const location = cleanLocation(
+    cleanString(semantic.location) || cleanString(nlp.location) || inferLocation(email.cleanedText)
+  ) || null;
   const modeOfWork = normalizeWorkMode(cleanString(semantic.mode_of_work) || location || "");
   const isInternship = detectInternship(email.cleanedText, semantic.internship);
   const ppoAvailable = detectPpo(email.cleanedText, isInternship, semantic.ppo);
   const serviceAgreement = detectServiceAgreement(email.cleanedText, semantic.service_agreement);
   const bondPeriodMonths = deterministic.bondPeriodMonths ?? normalizeBondPeriodMonths(semantic.bond_period_months, email.cleanedText);
 
+  // Eligible departments — prefer structured eligible_departments from Ollama,
+  // fall back to flat streams + specialisations
   const eligibleDepartments = normalizeEligibleDepartments(
     [
       ...(semantic.eligible_streams ?? []),
@@ -69,35 +91,30 @@ export async function extractRecruiterInformation(email: ParsedEmail): Promise<R
       ...(nlp.eligible_branches ?? []),
       ...heuristics.eligible_branches
     ],
-    [...(semantic.eligible_specialisations ?? []), ...(nlp.eligible_specialisations ?? [])]
+    [...(semantic.eligible_specialisations ?? []), ...(nlp.eligible_specialisations ?? [])],
+    semantic.eligible_departments ?? []
   );
 
-  const eligibleBatchYears = normalizeEligibleBatchYears([...(semantic.eligible_years ?? []), ...(nlp.eligible_years ?? [])], email.cleanedText);
+  const eligibleBatchYears = normalizeEligibleBatchYears(
+    [...(semantic.eligible_years ?? []), ...(nlp.eligible_years ?? [])],
+    email.cleanedText
+  );
   const skillsRequired = normalizeSkillGroup(mergeStringLists(semantic.skills_required, nlp.skills_required));
   const preferredSkills = normalizeSkillGroup(mergeStringLists(semantic.preferred_skills, nlp.preferred_skills));
-  const roundDetails = normalizeRoundDetails([...(semantic.round_details ?? []), ...(nlp.round_details ?? [])], email.cleanedText);
+  const roundDetails = normalizeRoundDetails(
+    [...(semantic.round_details ?? []), ...(nlp.round_details ?? [])],
+    email.cleanedText
+  );
 
   const applicationLink = deterministic.applicationLink || trustedUrl(semantic.registration_link, email.cleanedText);
   const recruiterEmail = deterministic.recruiterEmail || trustedEmail(semantic.contact_email, email.cleanedText);
   const contactEmail = recruiterEmail || trustedEmail(semantic.contact_email, email.cleanedText);
-  const contactPhone = deterministic.contactPhone ?? normalizePhone(semantic.contact_phone);
+  const rawPhone = deterministic.contactPhone ?? normalizePhone(semantic.contact_phone);
+  const contactPhone = isPlacementCellPhone(rawPhone, email.cleanedText) ? null : rawPhone;
   const currentDeadline =
     (deterministic.deadline ? normalizeDeadlineTimestamp(deterministic.deadline) : null) ??
     (cleanString(semantic.deadline) ? normalizeDeadlineTimestamp(cleanString(semantic.deadline)) : null);
-  const totalPositions = deterministic.totalPositions ?? extractTotalPositions(email.cleanedText, semantic.total_positions);
-
-  if (eligibleDepartments?.some((item) => item.category === "circuit")) {
-    addIfMentioned(notes, email.cleanedText, /all\s+circuit\s+branches/i, "Circuit branches inferred semantically.");
-  }
-  if (!applicationLink && /registration\s+link|click\s+here\s+to\s+register|register\s+on\s+the\s+link/i.test(email.cleanedText)) {
-    notes.add("Registration link referenced but actual URL missing.");
-  }
-  if (allowedBacklogs === null && /backlog|arrears/i.test(email.cleanedText)) {
-    notes.add("Backlog policy mentioned but could not be normalized confidently.");
-  }
-  if (!cleanString(semantic.description) && /job description|jd|responsibilit|about company/i.test(email.cleanedText)) {
-    notes.add("Description section referenced but concise role summary was not confidently extracted.");
-  }
+  const openings = deterministic.openings ?? extractTotalPositions(email.cleanedText, semantic.openings);
 
   return {
     company_name: companyName,
@@ -121,14 +138,44 @@ export async function extractRecruiterInformation(email: ParsedEmail): Promise<R
     total_rounds: roundDetails.length,
     round_details: roundDetails,
     current_deadline: currentDeadline,
-    total_positions: totalPositions,
+    openings,
+    application_count: null,
     application_link: applicationLink || null,
     contact_email: contactEmail || null,
     contact_phone: contactPhone,
-    additional_information: notes.size ? [...notes].join(" ") : null,
-    job_source: normalizeJobSource(semantic.job_source, email.cleanedText)
+    additional_information: notes.size ? [...notes].join(" | ") : null
   };
 }
+
+/** Clone the base entity and apply per-role overrides from semantic.roles[]. */
+function mergeRoleOverride(base: RecruiterEntity, roleEntry: SemanticRole): RecruiterEntity {
+  const entity: RecruiterEntity = { ...base };
+
+  if (cleanString(roleEntry.company_name)) entity.company_name = cleanString(roleEntry.company_name) || null;
+  if (cleanString(roleEntry.role)) entity.role = normalizeRole(cleanRole(cleanString(roleEntry.role)) || "Unknown Role");
+  if (cleanString(roleEntry.description)) entity.description = normalizeDescription(roleEntry.description);
+
+  if (typeof roleEntry.ctc_lpa === "number" && roleEntry.ctc_lpa > 0) {
+    entity.ctc = normalizeSalaryDisplay(roleEntry.ctc_lpa);
+  }
+  if (typeof roleEntry.stipend === "number" && roleEntry.stipend > 0) {
+    entity.stipend = normalizeStipendDisplay(roleEntry.stipend);
+  }
+  if (typeof roleEntry.is_internship === "boolean") {
+    entity.is_internship = roleEntry.is_internship;
+    entity.ppo_available = roleEntry.is_internship ? Boolean(roleEntry.ppo) : false;
+  }
+  if (roleEntry.skills_required?.length) {
+    entity.skills_required = normalizeSkillGroup(roleEntry.skills_required) ?? { technical: [], soft_skills: [] };
+  }
+  if (roleEntry.preferred_skills?.length) {
+    entity.preferred_skills = normalizeSkillGroup(roleEntry.preferred_skills);
+  }
+
+  return entity;
+}
+
+// ─── cross-validation helpers ────────────────────────────────────────────────
 
 function crossValidateSalary(regexLpa: number | null, ollamaLpa: number | undefined): number | null {
   const rVal = regexLpa;
@@ -158,8 +205,28 @@ function crossValidateStipend(regexStipend: number | null, ollamaStipend: number
   return regexStipend;
 }
 
+// ─── string helpers ───────────────────────────────────────────────────────────
+
 function cleanString(value: string | undefined): string {
   return value?.trim() && value.trim() !== "-1" ? value.trim() : "";
+}
+
+function cleanRole(value: string): string {
+  if (!value) return "";
+  return value
+    .replace(/\s*[-–|]\s*Fresher\s*$/i, "")
+    .replace(/\s+(qualifications?|requirements?|eligibility|skills?)\s*:.*$/i, "")
+    .replace(/\s*[,(]\s*B\.[A-Z].*$/i, "")
+    .trim();
+}
+
+const LOCATION_NOISE_PATTERN = /\b(employment\s+type|ctc|salary|requirements?|eligibility|cgpa|qualification|deadline|apply)\b/i;
+
+function cleanLocation(raw: string): string {
+  if (!raw) return "";
+  const noiseIndex = raw.search(LOCATION_NOISE_PATTERN);
+  const trimmed = noiseIndex > 0 ? raw.slice(0, noiseIndex) : raw;
+  return trimmed.replace(/[,;:\s]+$/, "").trim();
 }
 
 function mergeStringLists(a: string[] | undefined, b: string[] | undefined): string[] {
@@ -169,10 +236,7 @@ function mergeStringLists(a: string[] | undefined, b: string[] | undefined): str
     const clean = item.replace(/\s+/g, " ").trim();
     if (!clean) continue;
     const key = clean.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(clean);
-    }
+    if (!seen.has(key)) { seen.add(key); out.push(clean); }
   }
   return out;
 }
@@ -187,23 +251,21 @@ function nullIfNegative(value: number): number | null {
   return value >= 0 ? value : null;
 }
 
+const MAIL_APP_DOMAINS = /^https?:\/\/(?:mail\.google\.com|outlook\.live\.com|mail\.yahoo\.com)/i;
+
 function trustedUrl(value: string | undefined, text: string): string {
   const url = cleanString(value);
-  return url && text.includes(url) ? url : "";
+  if (!url || !url.match(/^https?:\/\//i) || MAIL_APP_DOMAINS.test(url)) return "";
+  return text.includes(url) ? url : "";
 }
 
 function trustedEmail(value: string | undefined, text: string): string {
   const email = cleanString(value);
-  return email && text.toLowerCase().includes(email.toLowerCase()) && !/(placement|\.edu|\.ac\.in|gmail\.com|yahoo\.com|outlook\.com)/i.test(email)
+  return email &&
+    text.toLowerCase().includes(email.toLowerCase()) &&
+    !/(placement|\.edu|\.ac\.in|gmail\.com|yahoo\.com|outlook\.com)/i.test(email)
     ? email
     : "";
-}
-
-function normalizeJobSource(value: string | undefined, text: string): string | null {
-  const source = cleanString(value).toLowerCase();
-  if (["campus", "linkedin", "referral", "offcampus"].includes(source)) return source;
-  if (/\bcampus|placement|college|university\b/i.test(text)) return "campus";
-  return null;
 }
 
 function inferCompanyFromSubject(subject: string): string {
@@ -213,14 +275,15 @@ function inferCompanyFromSubject(subject: string): string {
     .replace(/\s+(campus\s+)?(?:hiring|recruitment)\s+drive.*$/i, "")
     .replace(/\s+campus\s+drive.*$/i, "")
     .replace(/\s+placement\s+drive.*$/i, "")
+    .replace(/\s+intern\s+hiring.*$/i, "")
     .replace(/\s+drive.*$/i, "")
     .trim();
-  return cleaned.split(/\s*[&|,\-–—]\s*/)[0]?.trim() || "";
+  return cleaned.split(/\s+[|,–—]\s+|\s*,\s*/)[0]?.trim() || cleaned;
 }
 
 function inferCompanyFromProfile(text: string): string {
   const profileLine = text.match(/profile\s*:\s*([^\n]+)/i)?.[1] ?? "";
-  const parts = profileLine.split("-").map((part) => part.trim()).filter(Boolean);
+  const parts = profileLine.split("-").map((p) => p.trim()).filter(Boolean);
   return parts.length >= 2 ? parts[1] : "";
 }
 
@@ -231,12 +294,23 @@ function inferRoleFromProfile(text: string): string {
 
 function inferLocation(text: string): string {
   const lines = text.split(/\n/);
-  const index = lines.findIndex((item) => /\b(work\s+location|base\s+location|job\s+location|location)\b/i.test(item));
+  const index = lines.findIndex((l) => /\b(work\s+location|base\s+location|job\s+location|location)\b/i.test(l));
   if (index === -1) return "";
   const sameLine = lines[index].replace(/.*?\b(?:work\s+location|base\s+location|job\s+location|location)\b\s*[:\-]?\s*/i, "").trim();
   return sameLine || lines[index + 1]?.trim() || "";
 }
 
-function addIfMentioned(info: Set<string>, text: string, pattern: RegExp, note: string): void {
-  if (pattern.test(text)) info.add(note);
+const PLACEMENT_CELL_PHONE_PATTERN =
+  /placement\s+(?:cell|officer|coordinator|head)|t\s*[&]\s*p\b|training\s+and\s+placement|tpo\b|head\s*[-–]\s*t|placement\s+cet|college\s+of\s+engineering|head\s+of\s+(?:t&p|placement)/i;
+
+function isPlacementCellPhone(phone: string | null, text: string): boolean {
+  if (!phone) return false;
+  const digits = phone.replace(/\D/g, "").slice(-10);
+  const lines = text.split(/\n/);
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].includes(digits)) continue;
+    const window = lines.slice(Math.max(0, i - 3), Math.min(lines.length, i + 4)).join(" ");
+    if (PLACEMENT_CELL_PHONE_PATTERN.test(window)) return true;
+  }
+  return false;
 }

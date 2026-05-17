@@ -32,7 +32,7 @@ export type DeterministicExtraction = {
   recruiterEmail: string;
   contactPhone: string | null;
   bondPeriodMonths: number | null;
-  totalPositions: number | null;
+  openings: number | null;
   sourceSignals: Record<string, string>;
 };
 
@@ -84,10 +84,27 @@ function extractRecruiterEmail(text: string): { email: string; signal: string } 
   return { email: recruiter ?? "", signal: recruiter ? "regex" : "missing" };
 }
 
+const PLACEMENT_CELL_CONTEXT = /(?:placement\s+(?:cell|officer|coordinator)|tpo|training\s+and\s+placement|dr\.|prof\.|college\s+of|institute\s+of|university\s+of)/i;
+
 function extractContactPhone(text: string): { phone: string | null; signal: string } {
-  const phoneMatch = text.match(/(?:\+91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b/) ?? text.match(/\b0\d{10}\b/);
-  const phone = normalizePhone(phoneMatch?.[0]);
-  return { phone, signal: phone ? "regex" : "missing" };
+  const lines = text.split(/\n/);
+  // Prefer phones on lines that look like recruiter/HR context
+  for (const line of lines) {
+    if (PLACEMENT_CELL_CONTEXT.test(line)) continue;
+    if (/(?:contact|hr|reach\s+(?:us|out)|phone|mobile|call|whatsapp)/i.test(line)) {
+      const m = line.match(/(?:\+91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b/) ?? line.match(/\b0\d{10}\b/);
+      const phone = normalizePhone(m?.[0]);
+      if (phone) return { phone, signal: "regex-hr" };
+    }
+  }
+  // Fall back to first phone that is NOT on a placement-cell line
+  for (const line of lines) {
+    if (PLACEMENT_CELL_CONTEXT.test(line)) continue;
+    const m = line.match(/(?:\+91[\s-]?)?\b[6-9]\d{4}[\s-]?\d{5}\b/) ?? line.match(/\b0\d{10}\b/);
+    const phone = normalizePhone(m?.[0]);
+    if (phone) return { phone, signal: "regex" };
+  }
+  return { phone: null, signal: "missing" };
 }
 
 function extractBondPeriod(text: string): { months: number | null; signal: string } {
@@ -109,7 +126,7 @@ function extractTotalPositions(text: string): { totalPositions: number | null; s
       return { totalPositions: value, signal: "regex" };
     }
   }
-  return { totalPositions: /\b(role|position|hiring|recruitment|internship|drive)\b/i.test(text) ? 1 : null, signal: "implied" };
+  return { totalPositions: null, signal: "missing" };
 }
 
 export function extractDeterministic(text: string): DeterministicExtraction {
@@ -119,36 +136,37 @@ export function extractDeterministic(text: string): DeterministicExtraction {
   const { email, signal: emailSignal } = extractRecruiterEmail(text);
   const { phone, signal: phoneSignal } = extractContactPhone(text);
   const { months, signal: bondSignal } = extractBondPeriod(text);
-  const { totalPositions, signal: positionsSignal } = extractTotalPositions(text);
+  const { totalPositions: openings, signal: positionsSignal } = extractTotalPositions(text);
 
   const deadlineRaw = extractDeadlineRaw(text);
   const backlogMatch = text.match(
     /(no\s+(?:active|standing)?\s*backlogs?|no\s+standing\s+arrears|(?:max(?:imum)?|up\s+to|allowed|not\s+(?:have\s+)?more\s+than|more\s+than)\D{0,20}\d+\s+(?:active\s+)?(?:backlogs?|arrears?))/i
   );
   const backlogCount = normalizeBacklogCount(backlogMatch?.[1], text);
-  const registrationMatch = text.match(/https?:\/\/[^\s)]+/i);
+  const allUrls = [...text.matchAll(/https?:\/\/[^\s)>"]+/gi)].map((m) => m[0]);
+  const applicationUrl = allUrls.find((u) => !/mail\.google\.com|outlook\.live\.com|mail\.yahoo\.com/i.test(u));
   return {
     minCgpa,
     ctcLpa,
     stipendMonthly,
     allowedBacklogs: backlogCount >= 0 ? backlogCount : null,
     deadline: deadlineRaw,
-    applicationLink: registrationMatch?.[0]?.trim() ?? "",
+    applicationLink: applicationUrl?.trim() ?? "",
     recruiterEmail: email,
     contactPhone: phone,
     bondPeriodMonths: months,
-    totalPositions,
+    openings,
     sourceSignals: {
       min_cgpa: cgpaSignal,
       ctc: salarySignal,
       stipend: stipendSignal,
       allowed_backlogs: backlogCount >= 0 ? "regex" : "missing",
       current_deadline: deadlineRaw ? "regex" : "missing",
-      application_link: registrationMatch ? "regex" : "missing",
+      application_link: applicationUrl ? "regex" : "missing",
       recruiter_email: emailSignal,
       contact_phone: phoneSignal,
       bond_period_months: bondSignal,
-      total_positions: positionsSignal
+      openings: positionsSignal
     }
   };
 }

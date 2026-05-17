@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npx ts-node-dev *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(curl -s -X POST http://localhost:8080/api/local/process-inbox -H 'Content-Type: application/json' -d '{\"moveToProcessed\": false}')",
+      "Bash(cat /tmp/parser-server.log | grep -E \"\\\\[Ollama\\\\]\" | tail -20)",
+      "Read(//tmp/**)",
+      "Bash(curl -s -X POST http://10.21.231.80:11434/api/chat -H 'Content-Type: application/json' -d '{\"model\":\"qwen2.5:14b\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')",
+      "Bash(curl -s http://10.21.231.80:11434/api/tags)",
+      "Bash(curl -s -X POST http://10.21.231.80:11434/api/chat -H 'Content-Type: application/json' -d '{\"model\":\"mistral:latest\",\"stream\":false,\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}]}')"
+    ]
+  }
+}

@@ -4,14 +4,13 @@ import { EligibleBatchYear, EligibleDepartment, RoundDetail, SkillGroup } from "
 import {
   BRANCH_ALIASES,
   CIRCUIT_BRANCHES,
-  CORE_DEPARTMENTS,
-  DEGREE_DEPARTMENTS,
   INTERNSHIP_TERMS,
   PPO_TERMS,
   ROLE_ALIASES,
   ROUND_ALIASES,
   SERVICE_AGREEMENT_TERMS,
   SPECIALISATION_ALIASES,
+  SPECIALISATION_PARENT,
   WORK_MODE_ALIASES
 } from "./ontologies";
 
@@ -79,6 +78,7 @@ export function normalizeStipendDisplay(value: number | null | undefined): strin
 }
 
 export function normalizeBranch(branch: string): string {
+  if (!branch) return "";
   const key = branch.toLowerCase().replace(/[./]/g, " ").replace(/\s+/g, " ").trim();
   return BRANCH_MAP[key] ?? branch.trim();
 }
@@ -109,25 +109,73 @@ export function normalizeSpecialisations(values: string[]): string[] {
   return [...new Set(normalized)];
 }
 
-export function normalizeEligibleDepartments(streams: string[], specialisations: string[] = []): EligibleDepartment[] | null {
-  const departments = new Map<string, EligibleDepartment>();
-  const all = [...normalizeBranches(streams), ...normalizeSpecialisations(specialisations)];
+/**
+ * Parses a raw string that may be a compound "Department Specialisation" token
+ * such as "CSE AI/ML" or "IT Security".  Returns {department, specialisation}.
+ */
+function parseCompoundDept(raw: string): { department: string; specialisation: string | null } {
+  const trimmed = raw.trim();
 
-  for (const department of all) {
-    if (!department) continue;
-    const category = SPECIALISATION_ALIASES[department] || department === "AI & DS"
-      ? "specialization"
-      : (CIRCUIT_BRANCHES as readonly string[]).includes(department)
-        ? "circuit"
-        : (DEGREE_DEPARTMENTS as readonly string[]).includes(department)
-          ? "degree"
-          : (CORE_DEPARTMENTS as readonly string[]).includes(department)
-            ? "core"
-            : "other";
-    departments.set(department.toLowerCase(), { department, category });
+  // Check if the whole string is a known specialisation first
+  const specNorm = normalizeSpecialisations([trimmed]);
+  if (specNorm.length) {
+    const spec = specNorm[0];
+    return { department: SPECIALISATION_PARENT[spec] ?? spec, specialisation: spec };
   }
 
-  return departments.size ? [...departments.values()] : null;
+  // Try splitting "DEPT SPEC" — first token is dept, rest is specialisation
+  const parts = trimmed.split(/\s*[-–/]\s*|\s+/);
+  if (parts.length >= 2) {
+    const deptCandidate = normalizeBranch(parts[0]);
+    const specCandidate = parts.slice(1).join(" ");
+    const specNorm2 = normalizeSpecialisations([specCandidate]);
+    if (specNorm2.length) {
+      return { department: deptCandidate || parts[0], specialisation: specNorm2[0] };
+    }
+  }
+
+  return { department: normalizeBranch(trimmed) || trimmed, specialisation: null };
+}
+
+export function normalizeEligibleDepartments(
+  streams: string[],
+  specialisations: string[] = [],
+  deptSpecPairs: Array<{ department: string; specialisation?: string | null }> = []
+): EligibleDepartment[] | null {
+  // key = "DEPT||SPEC" to deduplicate
+  const seen = new Map<string, EligibleDepartment>();
+
+  const add = (dept: string, spec: string | null) => {
+    if (!dept) return;
+    const key = `${dept.toLowerCase()}||${(spec ?? "").toLowerCase()}`;
+    if (!seen.has(key)) seen.set(key, { department: dept, specialisation: spec });
+  };
+
+  // Explicit pairs from Ollama when it returns structured dept+specialisation
+  for (const pair of deptSpecPairs) {
+    if (!pair.department) continue;
+    const dept = normalizeBranch(pair.department) || pair.department;
+    const spec = pair.specialisation ? (normalizeSpecialisations([pair.specialisation])[0] ?? pair.specialisation) : null;
+    add(dept, spec);
+  }
+
+  // Flat stream strings — may be compound ("CSE AI/ML") or plain ("CSE")
+  for (const raw of normalizeBranches(streams)) {
+    const { department, specialisation } = parseCompoundDept(raw);
+    add(department, specialisation);
+  }
+
+  // Standalone specialisations — pair with their natural parent dept
+  for (const spec of normalizeSpecialisations(specialisations)) {
+    const parent = SPECIALISATION_PARENT[spec];
+    if (parent) {
+      add(parent, spec);
+    } else {
+      add(spec, null);
+    }
+  }
+
+  return seen.size ? [...seen.values()] : null;
 }
 
 export function normalizeRole(value: string): string {
@@ -341,7 +389,7 @@ export function extractTotalPositions(text: string, semanticValue?: number): num
     const value = Number(match[1]);
     if (!isBatchYear(value)) return value;
   }
-  return /\b(role|position|hiring|recruitment|internship|drive)\b/i.test(text) ? 1 : null;
+  return null;
 }
 
 function isBatchYear(value: number): boolean {

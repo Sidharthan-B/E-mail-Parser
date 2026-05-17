@@ -25,7 +25,7 @@ function errorToMessage(error: unknown): string {
 
 export type ProcessInboxItemOk = {
   input: string;
-  output: string;
+  outputs: string[];
   movedTo?: string;
 };
 
@@ -99,14 +99,21 @@ export async function processLocalInbox(options?: {
         continue;
       }
 
-      const entity = await runExtractionPipeline(email);
-      const jsonName = `${path.basename(name, path.extname(name))}.json`;
-      const outPath = path.join(outputDir, jsonName);
-      await fs.writeFile(outPath, `${JSON.stringify(entity, null, 2)}\n`, "utf-8");
+      const entities = await runExtractionPipeline(email);
+      const basename = path.basename(name, path.extname(name));
+      const outputs: string[] = [];
+
+      for (let i = 0; i < entities.length; i++) {
+        const suffix = entities.length > 1 ? `-${i + 1}` : "";
+        const jsonName = `${basename}${suffix}.json`;
+        const outPath = path.join(outputDir, jsonName);
+        await fs.writeFile(outPath, `${JSON.stringify(entities[i], null, 2)}\n`, "utf-8");
+        outputs.push(outPath);
+      }
 
       const ok: ProcessInboxItemOk = {
         input: inputPath,
-        output: outPath
+        outputs
       };
 
       if (moveToProcessed) {
