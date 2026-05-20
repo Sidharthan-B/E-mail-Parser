@@ -188,7 +188,7 @@ export function normalizeRole(value: string): string {
 
 export function normalizeWorkMode(value: string): string | null {
   const lower = value.toLowerCase();
-  for (const mode of ["Hybrid", "Remote", "Onsite"] as const) {
+  for (const mode of ["Hybrid", "Work From Home", "Office"] as const) {
     if (WORK_MODE_ALIASES[mode].some((alias) => lower.includes(alias))) return mode;
   }
   return null;

@@ -1,0 +1,87 @@
+{
+  "company_name": "Flexera",
+  "recruiter_email": null,
+  "role": "Associate Software Engineer",
+  "description": "Flexera is seeking highly motivated Engineering Graduates with a strong foundation in Computer Science fundamentals to join their engineering team. Selected candidates will work closely with experienced engineers, gaining hands-on exposure to real-world software development, testing, and engineering practices in a collaborative environment. Key responsibilities include learning and applying core software engineering concepts, participating in design, development, testing, and debugging applications, and writing clean, maintainable, and efficient code. Candidates will collaborate with cross-functional teams such as QA, Product, and Support, participate in code reviews, team discussions, and agile ceremonies, and continuously improve technical skills and domain knowledge.",
+  "location": "Bengaluru",
+  "mode_of_work": "Office",
+  "ctc": null,
+  "stipend": null,
+  "min_cgpa": 7.5,
+  "allowed_backlogs": 0,
+  "eligible_departments": [
+    {
+      "department": "CSE",
+      "specialisation": null
+    },
+    {
+      "department": "ISE",
+      "specialisation": null
+    },
+    {
+      "department": "IT",
+      "specialisation": null
+    },
+    {
+      "department": "CSE",
+      "specialisation": "AI/ML"
+    },
+    {
+      "department": "CSE",
+      "specialisation": "Data Science"
+    }
+  ],
+  "eligible_batch_years": [
+    {
+      "label": "Final Year"
+    },
+    {
+      "year": 2026
+    }
+  ],
+  "skills_required": {
+    "technical": [
+      "Computer Science fundamentals",
+      "Data Structures & Algorithms",
+      "Object-Oriented Programming",
+      "Java",
+      "Python",
+      "C",
+      "C++",
+      ".NET"
+    ],
+    "soft_skills": [
+      "Analytical skills",
+      "Problem-solving skills",
+      "Communication skills",
+      "Teamwork skills"
+    ]
+  },
+  "preferred_skills": null,
+  "is_internship": true,
+  "ppo_available": false,
+  "service_agreement": false,
+  "bond_period_months": null,
+  "total_rounds": 3,
+  "round_details": [
+    {
+      "round": 1,
+      "name": "Online Test / Technical Assessment"
+    },
+    {
+      "round": 2,
+      "name": "Technical Interview"
+    },
+    {
+      "round": 3,
+      "name": "HR Round"
+    }
+  ],
+  "current_deadline": null,
+  "openings": 10,
+  "application_count": null,
+  "application_link": null,
+  "contact_email": null,
+  "contact_phone": null,
+  "additional_information": "Candidates must be willing to work from office as per business requirements. | Final selection is subject to verification of academic records. | Final-year engineering students / fresh graduates(2026) with completing their Internship by August 2026."
+}

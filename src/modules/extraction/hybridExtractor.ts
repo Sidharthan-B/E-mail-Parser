@@ -19,21 +19,21 @@ import {
 } from "../normalization/normalizer";
 import { extractDeterministic } from "./deterministicExtractor";
 import { extractWithLocalNlp } from "./nlpBridge";
-import { extractWithOllamaSemanticAssistant, SemanticExtraction, SemanticRole } from "../semantic/ollamaSemanticAssistant";
+import { extractWithGeminiSemanticAssistant, SemanticExtraction, SemanticRole } from "../semantic/geminiSemanticAssistant";
 import { extractPlacementHeuristics } from "./placementHeuristics";
 
 export async function extractRecruiterInformation(email: ParsedEmail): Promise<RecruiterEntity[]> {
   const deterministic = extractDeterministic(email.cleanedText);
   const heuristics = extractPlacementHeuristics(email.cleanedText);
   const [semantic, nlp] = await Promise.all([
-    extractWithOllamaSemanticAssistant(email.text),  // use pre-section original; cleanedText has sections appended
+    extractWithGeminiSemanticAssistant(email.text),  // use pre-section original; cleanedText has sections appended
     extractWithLocalNlp(email.cleanedText)
   ]);
 
   // Build shared base fields that apply to all roles
   const base = buildBaseEntity(email, deterministic, heuristics, semantic, nlp);
 
-  // Multi-role: if Ollama returned multiple roles, fan out into separate entities
+  // Multi-role: if Gemini returned multiple roles, fan out into separate entities
   if (semantic.roles && semantic.roles.length > 1) {
     return semantic.roles.map((roleEntry) => mergeRoleOverride(base, roleEntry));
   }
@@ -81,7 +81,7 @@ function buildBaseEntity(
   const serviceAgreement = detectServiceAgreement(email.cleanedText, semantic.service_agreement);
   const bondPeriodMonths = deterministic.bondPeriodMonths ?? normalizeBondPeriodMonths(semantic.bond_period_months, email.cleanedText);
 
-  // Eligible departments — prefer structured eligible_departments from Ollama,
+  // Eligible departments — prefer structured eligible_departments from Gemini,
   // fall back to flat streams + specialisations
   const eligibleDepartments = normalizeEligibleDepartments(
     [
@@ -177,9 +177,9 @@ function mergeRoleOverride(base: RecruiterEntity, roleEntry: SemanticRole): Recr
 
 // ─── cross-validation helpers ────────────────────────────────────────────────
 
-function crossValidateSalary(regexLpa: number | null, ollamaLpa: number | undefined): number | null {
+function crossValidateSalary(regexLpa: number | null, geminiLpa: number | undefined): number | null {
   const rVal = regexLpa;
-  const oVal = ollamaLpa && ollamaLpa > 0 && ollamaLpa <= 200 ? ollamaLpa : null;
+  const oVal = geminiLpa && geminiLpa > 0 && geminiLpa <= 200 ? geminiLpa : null;
   if (rVal === null && oVal === null) return null;
   if (rVal === null) return oVal;
   if (oVal === null) return rVal;
@@ -191,15 +191,15 @@ function crossValidateSalary(regexLpa: number | null, ollamaLpa: number | undefi
   return rVal;
 }
 
-function crossValidateCgpa(regexCgpa: number | null, ollamaCgpa: number | undefined): number | null {
-  const oVal = ollamaCgpa && ollamaCgpa > 0 ? ollamaCgpa : null;
+function crossValidateCgpa(regexCgpa: number | null, geminiCgpa: number | undefined): number | null {
+  const oVal = geminiCgpa && geminiCgpa > 0 ? geminiCgpa : null;
   if (regexCgpa === null && oVal === null) return null;
   if (regexCgpa === null && oVal !== null) return oVal <= 10 ? oVal : null;
   return regexCgpa;
 }
 
-function crossValidateStipend(regexStipend: number | null, ollamaStipend: number | undefined): number | null {
-  const oVal = ollamaStipend && ollamaStipend > 0 ? ollamaStipend : null;
+function crossValidateStipend(regexStipend: number | null, geminiStipend: number | undefined): number | null {
+  const oVal = geminiStipend && geminiStipend > 0 ? geminiStipend : null;
   if (regexStipend === null && oVal === null) return null;
   if (regexStipend === null) return oVal;
   return regexStipend;

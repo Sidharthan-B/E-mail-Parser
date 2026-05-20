@@ -62,10 +62,10 @@ export const SPECIALISATION_PARENT: Record<string, string> = {
   "Software Engineering": "CSE"
 };
 
-export const WORK_MODE_ALIASES: Record<"Remote" | "Hybrid" | "Onsite", string[]> = {
-  Remote: ["remote", "wfh", "work from home", "virtual work"],
+export const WORK_MODE_ALIASES: Record<"Work From Home" | "Hybrid" | "Office", string[]> = {
+  "Work From Home": ["remote", "wfh", "work from home", "virtual work"],
   Hybrid: ["hybrid", "hybrid working", "hybrid model"],
-  Onsite: ["onsite", "on-site", "office based", "office-based", "in office", "work from office", "wfo"]
+  Office: ["onsite", "on-site", "office based", "office-based", "in office", "work from office", "wfo", "office"]
 };
 
 export const INTERNSHIP_TERMS = [

@@ -21,7 +21,7 @@ export function validateRecruiterEntity(entity: RecruiterEntity): RecruiterEntit
   entity.role = cleanString(entity.role) ?? "Unknown Role";
   entity.description = cleanString(entity.description);
   entity.location = cleanString(entity.location);
-  entity.mode_of_work = entity.mode_of_work && ["Remote", "Hybrid", "Onsite"].includes(entity.mode_of_work) ? entity.mode_of_work : null;
+  entity.mode_of_work = entity.mode_of_work && ["Work From Home", "Hybrid", "Office"].includes(entity.mode_of_work) ? entity.mode_of_work : null;
   entity.ctc = cleanString(entity.ctc);
   entity.stipend = cleanString(entity.stipend);
   entity.min_cgpa = validNumber(entity.min_cgpa, 0, 10);

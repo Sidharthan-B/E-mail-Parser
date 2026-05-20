@@ -1,0 +1,11 @@
+Company: TechCorp Solutions Pvt. Ltd.
+
+About Us:
+TechCorp Solutions is a leading software product company specializing in enterprise SaaS platforms for supply chain and logistics management. Founded in 2012, we serve over 500 enterprise clients across 30 countries. Our flagship product, SupplyIQ, is used by Fortune 500 companies to optimize their end-to-end supply chain operations.
+
+Website: https://www.techcorpsolutions.com
+LinkedIn: https://www.linkedin.com/company/techcorp-solutions
+Company Email: hr@techcorpsolutions.com
+Headquarters: Bengaluru, Karnataka, India
+Industry: Enterprise SaaS / Supply Chain Technology
+Top CTC Offered: 18 LPA
